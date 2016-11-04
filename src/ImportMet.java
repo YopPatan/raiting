@@ -31,10 +31,6 @@ public class ImportMet {
 		
 		// Inicio una transaccion SQL
 		Transaction tx = session.beginTransaction();
-/*		Canal canal = new Canal();
-		canal.setNombre("TEST");
-		Integer canalPk = (Integer) session.save(canal);
-		System.out.println("CANAL PK: " + canalPk);*/
 		
 		
 		try {
@@ -42,7 +38,6 @@ public class ImportMet {
 			// Leo archivo con datos
 			List<String> lines = Files.readAllLines(file);
 
-			
 			boolean detailData = false;
 			Integer medicionHogarId = null;
 			Integer medicionIndividuoId = null;
@@ -50,24 +45,29 @@ public class ImportMet {
 			Calendar fechaTermino = Calendar.getInstance();
 						
 			for (String line: lines) {
-//				System.out.println(line);
-				String hogarId;
-				MedicionHogar hogar = null;
-				MedicionIndividuo individuo = null;
-				
+
+				// Si la linea esta en blanco se salta a la siguiente
 				if (line.length() == 0 || line.charAt(0) == '<') {
 					continue;
 				}
 				
+//				String hogarId;
+				MedicionHogar hogar = null;
+				MedicionIndividuo individuo = null;
+
 				char token = line.charAt(0);
 				
 				switch (token) {
+				
+					// Informacion basica del hogar
 					case 'I':
+						
+						// Se crean variables con strings de la linea
 						detailData = false;
-						hogarId = line.substring(1, 9);
+						String hogarId = line.substring(1, 9);
 						String inicioStr = line.substring(9, 21);
 						String terminoStr = line.substring(21, 33);
-//						System.out.println("\n INICIO HOGAR\n" + hogarId + " " + fechaInicio + " " + fechaTermino);
+
 						fechaInicio.set(
 								Integer.valueOf(inicioStr.substring(0, 4)), 
 								Integer.valueOf(inicioStr.substring(4, 6)) - 1, 
@@ -84,20 +84,20 @@ public class ImportMet {
 								Integer.valueOf(terminoStr.substring(10)),
 								0);
 						
+						// Se insertan los datos del hogar en la base de datos
 						hogar = new MedicionHogar();
 						hogar.setHogarId(Integer.valueOf(hogarId));
 						hogar.setFechaInicio(fechaInicio.getTime());
 						hogar.setFechaTermino(fechaTermino.getTime());
 						medicionHogarId = (Integer) session.save(hogar);
 						
-//						System.out.println(medicionHogarId);
-						
 						break;
+					
+					// Informacion detallada del hogar o del individuo
 					case 'D':
 						String[] ids = line.split(",");
 						
-//						System.out.println(line);
-						
+						// Informacion del individuo
 						if (detailData) {
 							if (ids[1].equals("0")) {
 								break;
@@ -106,6 +106,7 @@ public class ImportMet {
 							Gse gse = session.get(Gse.class, Integer.valueOf(ids[1]));
 							Edad edad = session.get(Edad.class, Integer.valueOf(ids[6]));
 							
+							// Actualizo la informacion del individuo con el detalle
 							individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
 							individuo.setGse(gse);
 							individuo.setEdad(edad);
@@ -117,68 +118,81 @@ public class ImportMet {
 							individuo.setTipoJefeHogar(Integer.valueOf(ids[8]));
 							session.update(individuo);
 
-						} else {
+						}
+						
+						// Informacion del hogar
+						else {
 							Gse gse = session.get(Gse.class, Integer.valueOf(ids[1]));
 							
+							// Actualizo la informacion del hogar con el detalle
 							hogar = session.get(MedicionHogar.class, medicionHogarId);
 							hogar.setGse(gse);
 							hogar.setCable(Integer.valueOf(ids[2]));
 							session.update(hogar);
-//							System.out.println(ids[1] + " " + ids[2]);
 						}
 						break;
+					
+					// Peso del hogar o el individuo
 					case 'W':
 						String peso = line.substring(1);
 						
+						// Informacion del individuo
 						if (detailData) {
 							individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
 							individuo.setIndividuoPeso(new BigDecimal(peso));
 							session.update(individuo);
-
-						} else {
+						}
+						
+						// Informacion del hogar
+						else {
 							hogar = session.get(MedicionHogar.class, medicionHogarId);
 							hogar.setHogarPeso(new BigDecimal(peso));
 							session.update(hogar);
-//							System.out.println(peso);
 						}
 						break;
+					
+					// Informacion basica del individuo
 					case 'Z':
 						detailData = true;
-						hogarId = line.substring(1, 9);
+
 						String individuoId = line.substring(9);
 						
 						hogar = session.get(MedicionHogar.class, medicionHogarId);
-						
+
+						// Se insertan los datos del individuo en la base de datos
 						individuo = new MedicionIndividuo();
 						individuo.setMedicionHogar(hogar);
 						individuo.setIndividuoId(Integer.valueOf(individuoId));
 						medicionIndividuoId = (Integer) session.save(individuo);
 						
-//						System.out.println(hogarId + " " + individuoId);
 						break;
+					
+					// Informacion de los canales vistos
 					default:
+						
+						// Se crean variables con strings de la linea
 						String tvId = line.substring(0, 2);
 						String canalId = line.substring(2, 11);
 						String minVistos = line.substring(12);
-						
-						Pattern p = Pattern.compile("[A|B][0-9]+");
-						Matcher m = p.matcher(minVistos);
 						
 						Calendar fechaInicioCanal = (Calendar) fechaInicio.clone();
 						
 						individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
 						
-//						System.out.println("\n" + tvId + " " + canalId + " " + minVistos);
+						// Expresion regular para ver minutos vistos por canal
+						Pattern p = Pattern.compile("[A|B][0-9]+");
+						Matcher m = p.matcher(minVistos);
 						
 						while (m.find()) {
 							char tipo = m.group().charAt(0);
 							String minutos = m.group().substring(1);
 							
 							if (tipo == 'B') {
-								MedicionCanal canal = new MedicionCanal();
 								Calendar fechaTerminoCanal = (Calendar) fechaInicioCanal.clone();
 								fechaTerminoCanal.add(Calendar.MINUTE, Integer.valueOf(minutos));
-								
+
+								// Se inserta la medicion del canal
+								MedicionCanal canal = new MedicionCanal();								
 								canal.setMedicionIndividuo(individuo);
 								canal.setTelevisorId(Integer.valueOf(tvId));
 								canal.setCanalId(Integer.valueOf(canalId));
@@ -187,10 +201,8 @@ public class ImportMet {
 								session.save(canal);
 							}
 							
+							// Sumo los minutos hasta el momento
 							fechaInicioCanal.add(Calendar.MINUTE, Integer.valueOf(minutos));
-							
-							//System.out.println(tipo + " " + minutos + " " + fechaCanal.getTime());
-							
 						}
 						break;
 				}
@@ -202,6 +214,7 @@ public class ImportMet {
 			e.printStackTrace();
 		}
 		
+		// Se realiza cambios a la base de datos
 		tx.commit();
 	}
 }
