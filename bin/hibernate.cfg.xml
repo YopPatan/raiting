@@ -18,5 +18,6 @@
         <mapping class="model.Edad" />
         <mapping class="model.MedicionCanal" />
         <mapping class="model.Canal" />
+        <mapping class="model.Log" />
     </session-factory>
 </hibernate-configuration>

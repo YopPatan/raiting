@@ -8,4 +8,5 @@
   <table-filter match-catalog="raiting" match-name="medicion_canal"/>
   <table-filter match-catalog="raiting" match-name="medicion_hogar"/>
   <table-filter match-catalog="raiting" match-name="medicion_individuo"/>
+  <table-filter match-catalog="raiting" match-name="log"/>
 </hibernate-reverse-engineering>
