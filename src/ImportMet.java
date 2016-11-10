@@ -5,16 +5,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
 import org.hibernate.cfg.Configuration;
-
-import com.mysql.jdbc.log.Log;
 
 import model.Edad;
 import model.Gse;
@@ -42,33 +42,39 @@ public class ImportMet {
 				
 				// Reviso si el archivo ya se encuentra en el log
 				@SuppressWarnings("unchecked")
-				List<model.Log> logs = (List<model.Log>) session.createQuery("FROM Log WHERE filename = :filename").setParameter("filename", file.getFileName().toString()).getResultList();
+				List<model.Log> logs = (List<model.Log>) session.createQuery("FROM Log WHERE filename = :filename")
+						.setParameter("filename", file.getFileName().toString())
+						.getResultList();
 				
 				if (logs.size() == 0) {
 
 					// Leo archivo con datos
 					List<String> lines = Files.readAllLines(file);
 
+					// Valido la primera linea del archivo
+					boolean existDate = true;
 					String firstline = lines.get(0);
+					Calendar fechaLog = Calendar.getInstance();
 					if (!firstline.isEmpty()) {
+						
+						// Valido que el token sea I y que la fecha no exista
 						char token = firstline.charAt(0);
 						if (token == 'I') {
 							String inicioStr = firstline.substring(9, 21);
-							Calendar fechaInicio = Calendar.getInstance();
-							fechaInicio.set(
+							fechaLog.set(
 									Integer.valueOf(inicioStr.substring(0, 4)), 
 									Integer.valueOf(inicioStr.substring(4, 6)), 
-									Integer.valueOf(inicioStr.substring(6, 8)));
+									Integer.valueOf(inicioStr.substring(6, 8)),
+									0, 0, 0);
 
 							@SuppressWarnings("unchecked")
-							List<model.Log> logsByDate = session.createQuery("FROM Log WHERE fecha_archivo = :fecha_archivo").setParameter("fecha_archivo", fechaInicio.getTime()).getResultList();
+							List<model.Log> logsByDate = (List<model.Log>) session.createQuery("FROM Log WHERE fecha_archivo = :fecha_archivo")
+									.setParameter("fecha_archivo", fechaLog.getTime())
+									.getResultList();
+							if (logsByDate.size() == 0) {
+								existDate = false;
+							}
 						}
-						else {
-							
-						}
-					}
-					else {
-						
 					}
 					
 					boolean detailData = false;
@@ -80,180 +86,187 @@ public class ImportMet {
 					// Inicio una transaccion SQL
 					Transaction tx = session.beginTransaction();
 					
-					// Recorro cada linea
-					for (String line: lines) {
-						
-						// Si la linea esta en blanco se salta a la siguiente
-						if (line.length() == 0 || line.charAt(0) == '<') {
-							continue;
-						}
-						
-//						String hogarId;
-						MedicionHogar hogar = null;
-						MedicionIndividuo individuo = null;
-
-						char token = line.charAt(0);
-						switch (token) {
-						
-							// Informacion basica del hogar
-							case 'I':
-								
-								// Se crean variables con strings de la linea
-								detailData = false;
-								String hogarId = line.substring(1, 9);
-								String inicioStr = line.substring(9, 21);
-								String terminoStr = line.substring(21, 33);
-
-								fechaInicio.set(
-										Integer.valueOf(inicioStr.substring(0, 4)), 
-										Integer.valueOf(inicioStr.substring(4, 6)) - 1, 
-										Integer.valueOf(inicioStr.substring(6, 8)),
-										Integer.valueOf(inicioStr.substring(8, 10)),
-										Integer.valueOf(inicioStr.substring(10)), 
-										0);
-
-								fechaTermino.set(
-										Integer.valueOf(terminoStr.substring(0, 4)),
-										Integer.valueOf(terminoStr.substring(4, 6)) - 1,
-										Integer.valueOf(terminoStr.substring(6, 8)),
-										Integer.valueOf(terminoStr.substring(8, 10)),
-										Integer.valueOf(terminoStr.substring(10)),
-										0);
-								
-								// Se insertan los datos del hogar en la base de datos
-								hogar = new MedicionHogar();
-								hogar.setHogarId(Integer.valueOf(hogarId));
-								hogar.setFechaInicio(fechaInicio.getTime());
-								hogar.setFechaTermino(fechaTermino.getTime());
-								medicionHogarId = (Integer) session.save(hogar);
-								
-								break;
+					if (!existDate) {
+					
+						// Recorro cada linea
+						for (String line: lines) {
 							
-							// Informacion detallada del hogar o del individuo
-							case 'D':
-								String[] ids = line.split(",");
+							// Si la linea esta en blanco se salta a la siguiente
+							if (line.length() == 0 || line.charAt(0) == '<') {
+								continue;
+							}
+							
+	//						String hogarId;
+							MedicionHogar hogar = null;
+							MedicionIndividuo individuo = null;
+	
+							char token = line.charAt(0);
+							switch (token) {
+							
+								// Informacion basica del hogar
+								case 'I':
+									
+									// Se crean variables con strings de la linea
+									detailData = false;
+									String hogarId = line.substring(1, 9);
+									String inicioStr = line.substring(9, 21);
+									String terminoStr = line.substring(21, 33);
+	
+									fechaInicio.set(
+											Integer.valueOf(inicioStr.substring(0, 4)), 
+											Integer.valueOf(inicioStr.substring(4, 6)) - 1, 
+											Integer.valueOf(inicioStr.substring(6, 8)),
+											Integer.valueOf(inicioStr.substring(8, 10)),
+											Integer.valueOf(inicioStr.substring(10)), 
+											0);
+	
+									fechaTermino.set(
+											Integer.valueOf(terminoStr.substring(0, 4)),
+											Integer.valueOf(terminoStr.substring(4, 6)) - 1,
+											Integer.valueOf(terminoStr.substring(6, 8)),
+											Integer.valueOf(terminoStr.substring(8, 10)),
+											Integer.valueOf(terminoStr.substring(10)),
+											0);
+									
+									// Se insertan los datos del hogar en la base de datos
+									hogar = new MedicionHogar();
+									hogar.setHogarId(Integer.valueOf(hogarId));
+									hogar.setFechaInicio(fechaInicio.getTime());
+									hogar.setFechaTermino(fechaTermino.getTime());
+									medicionHogarId = (Integer) session.save(hogar);
+									
+									break;
 								
-								// Informacion del individuo
-								if (detailData) {
-									if (ids[1].equals("0")) {
-										break;
+								// Informacion detallada del hogar o del individuo
+								case 'D':
+									String[] ids = line.split(",");
+									
+									// Informacion del individuo
+									if (detailData) {
+										if (ids[1].equals("0")) {
+											break;
+										}
+										
+										Gse gse = session.get(Gse.class, Integer.valueOf(ids[1]));
+										Edad edad = session.get(Edad.class, Integer.valueOf(ids[6]));
+										
+										// Actualizo la informacion del individuo con el detalle
+										individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
+										individuo.setGse(gse);
+										individuo.setEdad(edad);
+										individuo.setCable(Integer.valueOf(ids[2]));
+										individuo.setGenero(Integer.valueOf(ids[5]));
+										individuo.setEdadCnt(Integer.valueOf(ids[7]));
+										individuo.setTipoDuennaCasa(Integer.valueOf(ids[4]));
+	//									individuo.setTipoTrabaja(Integer.valueOf(ids[4]));
+										individuo.setTipoJefeHogar(Integer.valueOf(ids[8]));
+										session.update(individuo);
+	
 									}
 									
-									Gse gse = session.get(Gse.class, Integer.valueOf(ids[1]));
-									Edad edad = session.get(Edad.class, Integer.valueOf(ids[6]));
+									// Informacion del hogar
+									else {
+										Gse gse = session.get(Gse.class, Integer.valueOf(ids[1]));
+										
+										// Actualizo la informacion del hogar con el detalle
+										hogar = session.get(MedicionHogar.class, medicionHogarId);
+										hogar.setGse(gse);
+										hogar.setCable(Integer.valueOf(ids[2]));
+										session.update(hogar);
+									}
+									break;
+								
+								// Peso del hogar o el individuo
+								case 'W':
+									String peso = line.substring(1);
 									
-									// Actualizo la informacion del individuo con el detalle
-									individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
-									individuo.setGse(gse);
-									individuo.setEdad(edad);
-									individuo.setCable(Integer.valueOf(ids[2]));
-									individuo.setGenero(Integer.valueOf(ids[5]));
-									individuo.setEdadCnt(Integer.valueOf(ids[7]));
-									individuo.setTipoDuennaCasa(Integer.valueOf(ids[4]));
-//									individuo.setTipoTrabaja(Integer.valueOf(ids[4]));
-									individuo.setTipoJefeHogar(Integer.valueOf(ids[8]));
-									session.update(individuo);
-
-								}
-								
-								// Informacion del hogar
-								else {
-									Gse gse = session.get(Gse.class, Integer.valueOf(ids[1]));
-									
-									// Actualizo la informacion del hogar con el detalle
-									hogar = session.get(MedicionHogar.class, medicionHogarId);
-									hogar.setGse(gse);
-									hogar.setCable(Integer.valueOf(ids[2]));
-									session.update(hogar);
-								}
-								break;
-							
-							// Peso del hogar o el individuo
-							case 'W':
-								String peso = line.substring(1);
-								
-								// Informacion del individuo
-								if (detailData) {
-									individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
-									individuo.setIndividuoPeso(new BigDecimal(peso));
-									session.update(individuo);
-								}
-								
-								// Informacion del hogar
-								else {
-									hogar = session.get(MedicionHogar.class, medicionHogarId);
-									hogar.setHogarPeso(new BigDecimal(peso));
-									session.update(hogar);
-								}
-								break;
-							
-							// Informacion basica del individuo
-							case 'Z':
-								detailData = true;
-
-								String individuoId = line.substring(9);
-								
-								hogar = session.get(MedicionHogar.class, medicionHogarId);
-
-								// Se insertan los datos del individuo en la base de datos
-								individuo = new MedicionIndividuo();
-								individuo.setMedicionHogar(hogar);
-								individuo.setIndividuoId(Integer.valueOf(individuoId));
-								medicionIndividuoId = (Integer) session.save(individuo);
-								
-								break;
-							
-							// Informacion de los canales vistos
-							default:
-								
-								// Se crean variables con strings de la linea
-								String tvId = line.substring(0, 2);
-								String canalId = line.substring(2, 11);
-								String minVistos = line.substring(12);
-								
-								Calendar fechaInicioCanal = (Calendar) fechaInicio.clone();
-								
-								individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
-								
-								// Expresion regular para ver minutos vistos por canal
-								Pattern p = Pattern.compile("[A|B][0-9]+");
-								Matcher m = p.matcher(minVistos);
-								
-								while (m.find()) {
-									char tipo = m.group().charAt(0);
-									String minutos = m.group().substring(1);
-									
-									if (tipo == 'B') {
-										Calendar fechaTerminoCanal = (Calendar) fechaInicioCanal.clone();
-										fechaTerminoCanal.add(Calendar.MINUTE, Integer.valueOf(minutos));
-
-										// Se inserta la medicion del canal
-										MedicionCanal canal = new MedicionCanal();								
-										canal.setMedicionIndividuo(individuo);
-										canal.setTelevisorId(Integer.valueOf(tvId));
-										canal.setCanalId(Integer.valueOf(canalId));
-										canal.setFechaInicio(fechaInicioCanal.getTime());
-										canal.setFechaTermino(fechaTerminoCanal.getTime());
-										session.save(canal);
+									// Informacion del individuo
+									if (detailData) {
+										individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
+										individuo.setIndividuoPeso(new BigDecimal(peso));
+										session.update(individuo);
 									}
 									
-									// Sumo los minutos hasta el momento
-									fechaInicioCanal.add(Calendar.MINUTE, Integer.valueOf(minutos));
-								}
-								break;
+									// Informacion del hogar
+									else {
+										hogar = session.get(MedicionHogar.class, medicionHogarId);
+										hogar.setHogarPeso(new BigDecimal(peso));
+										session.update(hogar);
+									}
+									break;
+								
+								// Informacion basica del individuo
+								case 'Z':
+									detailData = true;
+	
+									String individuoId = line.substring(9);
+									
+									hogar = session.get(MedicionHogar.class, medicionHogarId);
+	
+									// Se insertan los datos del individuo en la base de datos
+									individuo = new MedicionIndividuo();
+									individuo.setMedicionHogar(hogar);
+									individuo.setIndividuoId(Integer.valueOf(individuoId));
+									medicionIndividuoId = (Integer) session.save(individuo);
+									
+									break;
+								
+								// Informacion de los canales vistos
+								default:
+									
+									// Se crean variables con strings de la linea
+									String tvId = line.substring(0, 2);
+									String canalId = line.substring(2, 11);
+									String minVistos = line.substring(12);
+									
+									Calendar fechaInicioCanal = (Calendar) fechaInicio.clone();
+									
+									individuo = session.get(MedicionIndividuo.class, medicionIndividuoId);
+									
+									// Expresion regular para ver minutos vistos por canal
+									Pattern p = Pattern.compile("[A|B][0-9]+");
+									Matcher m = p.matcher(minVistos);
+									
+									while (m.find()) {
+										char tipo = m.group().charAt(0);
+										String minutos = m.group().substring(1);
+										
+										if (tipo == 'B') {
+											Calendar fechaTerminoCanal = (Calendar) fechaInicioCanal.clone();
+											fechaTerminoCanal.add(Calendar.MINUTE, Integer.valueOf(minutos));
+	
+											// Se inserta la medicion del canal
+											MedicionCanal canal = new MedicionCanal();								
+											canal.setMedicionIndividuo(individuo);
+											canal.setTelevisorId(Integer.valueOf(tvId));
+											canal.setCanalId(Integer.valueOf(canalId));
+											canal.setFechaInicio(fechaInicioCanal.getTime());
+											canal.setFechaTermino(fechaTerminoCanal.getTime());
+											session.save(canal);
+										}
+										
+										// Sumo los minutos hasta el momento
+										fechaInicioCanal.add(Calendar.MINUTE, Integer.valueOf(minutos));
+									}
+									break;
+							}
+							
 						}
+
+						// Guarda log
+						model.Log log = new model.Log();
+						log.setFilename(file.getFileName().toString());
+						log.setFechaArchivo(fechaLog.getTime());
+						log.setFechaImportacion(new Date());
+						session.save(log);
 						
+						tx.commit();
+						
+						System.out.println("OK");
 					}
-
-					// System.out.println(logs.size());
-					
-					model.Log log = new model.Log();
-					log.setFilename(file.getFileName().toString());
-					session.save(log);
-					
-					tx.commit();
-					
-					System.out.println("OK");
+					else {
+						System.out.println("BAD FORMAT");
+					}
 				}
 				else {
 					System.out.println("ALREADY EXIST");
@@ -262,27 +275,17 @@ public class ImportMet {
 			}
 		}
 		catch (IOException e) {
-			System.out.println("ERROR");
+			System.out.println("FILE ERROR");
 			
 			// TODO Auto-generated catch block
-			e.printStackTrace();
+			// e.printStackTrace();
 		}
+		catch (HibernateException e) {
+			System.out.println("DATABASE ERROR");
+		}
+		
+		session.close();
 		
 		System.exit(0);
-		
-		
-/*		Path file = Paths.get("mets/So_Dc/20161010.Met");
-		
-		try {
-			
-
-		}
-		catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}*/
-		
-		// Se realiza cambios a la base de datos
-//		tx.commit();
 	}
 }
