@@ -59,8 +59,9 @@ public class ImportMet {
 									Integer.valueOf(inicioStr.substring(0, 4)), 
 									Integer.valueOf(inicioStr.substring(4, 6)), 
 									Integer.valueOf(inicioStr.substring(6, 8)));
-							
-							List<model.Log> logsByDate = session.createQuery(arg0)
+
+							@SuppressWarnings("unchecked")
+							List<model.Log> logsByDate = session.createQuery("FROM Log WHERE fecha_archivo = :fecha_archivo").setParameter("fecha_archivo", fechaInicio.getTime()).getResultList();
 						}
 						else {
 							
