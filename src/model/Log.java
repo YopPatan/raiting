@@ -23,6 +23,8 @@ public class Log implements java.io.Serializable {
 	private Date fechaArchivo;
 
 	private Date fechaImportacion;
+	
+	private String filename;
 
 	public Log() {
 	}
@@ -45,7 +47,7 @@ public class Log implements java.io.Serializable {
 	}
 
 	@Temporal(TemporalType.TIMESTAMP)
-	@Column(name = "fecha_archivo", nullable = false, length = 0)
+	@Column(name = "fecha_archivo", nullable = true, length = 0)
 	public Date getFechaArchivo() {
 		return this.fechaArchivo;
 	}
@@ -55,13 +57,22 @@ public class Log implements java.io.Serializable {
 	}
 
 	@Temporal(TemporalType.TIMESTAMP)
-	@Column(name = "fecha_importacion", nullable = false, length = 0)
+	@Column(name = "fecha_importacion", nullable = true, length = 0)
 	public Date getFechaImportacion() {
 		return this.fechaImportacion;
 	}
 
 	public void setFechaImportacion(Date fechaImportacion) {
 		this.fechaImportacion = fechaImportacion;
+	}
+	
+	@Column(name = "filename", nullable = false)
+	public String getFilename() {
+		return this.filename;
+	}
+	
+	public void setFilename(String filename) {
+		this.filename = filename;
 	}
 
 }
